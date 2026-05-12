@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -L -o /tmp/cocoapods.gem https://rubygems.org/downloads/cocoapods-1.16.2.gem)",
+      "Bash(xcodebuild -downloadPlatform iOS)",
+      "Bash(xcrun simctl *)",
+      "Bash(flutter build *)",
+      "Bash(flutter run *)"
+    ]
+  }
+}
