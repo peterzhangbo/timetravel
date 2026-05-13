@@ -109,10 +109,24 @@ class MiniPlayer extends ConsumerWidget {
                 },
               ),
               IconButton(
-                icon: const Icon(Icons.pause_rounded,
-                    color: AppColors.textPrimary, size: 28),
-                onPressed: () {
-                  ref.read(playingIndexProvider.notifier).state = -1;
+                icon: Icon(
+                  ref.watch(isPlayingProvider) ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  color: AppColors.textPrimary, size: 28),
+                onPressed: () async {
+                  final isPlaying = ref.read(isPlayingProvider);
+                  final musicKit = ref.read(musicKitNativeProvider);
+                  if (isPlaying) {
+                    await musicKit.pause();
+                    ref.read(isPlayingProvider.notifier).state = false;
+                  } else {
+                    // Try to resume. If it fails or wasn't queued, playGlobalTrack will initialize the queue.
+                    try {
+                      await musicKit.resume();
+                      ref.read(isPlayingProvider.notifier).state = true;
+                    } catch (e) {
+                      await playGlobalTrack(ref);
+                    }
+                  }
                 },
               ),
               IconButton(

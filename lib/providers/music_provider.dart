@@ -93,3 +93,35 @@ final currentSongEntryProvider = Provider<SongEntry?>((ref) {
 
 /// Whether MusicKit native playback is being used.
 final usingNativePlaybackProvider = StateProvider<bool>((ref) => false);
+
+/// Global playing state for UI sync
+final isPlayingProvider = StateProvider<bool>((ref) => false);
+
+/// Helper to trigger playback globally
+Future<void> playGlobalTrack(WidgetRef ref) async {
+  final idx = ref.read(playingIndexProvider);
+  final matchedAsync = ref.read(matchedTracksProvider);
+  final matched = matchedAsync.valueOrNull;
+  if (matched == null || idx < 0 || idx >= matched.length) return;
+
+  final musicKit = ref.read(musicKitNativeProvider);
+  final allQueries = matched
+      .where((m) => m.$2 != null)
+      .map((m) => '${m.$1.artist} ${m.$1.title}')
+      .toList();
+
+  if (allQueries.isEmpty) return;
+
+  int offset = 0;
+  for (int i = 0; i < idx && i < matched.length; i++) {
+    if (matched[i].$2 != null) offset++;
+  }
+
+  ref.read(isPlayingProvider.notifier).state = true;
+  try {
+    await musicKit.playSongs(allQueries, startIndex: offset);
+  } catch (e) {
+    // Ignore native aborts
+    ref.read(isPlayingProvider.notifier).state = false;
+  }
+}

@@ -64,8 +64,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       setState(() => _error = 'Preview error');
     });
 
-    // Try playing current track
-    WidgetsBinding.instance.addPostFrameCallback((_) => _tryPlayCurrent());
+    // We do NOT auto-play on init to comply with Apple Music Guideline 4.5.2(i).
+    // The user must explicitly press play or select a new track to begin playback.
   }
 
   Future<void> _setupAudio() async {
@@ -101,20 +101,25 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   void _listenNativeState() {
     _nativeStateSub = _musicKit.playerStateStream.listen((state) {
       if (!mounted) return;
-      setState(() {
-        _isPlaying = state['isPlaying'] ?? false;
-        _position = Duration(
-            milliseconds: ((state['position'] ?? 0.0) * 1000).toInt());
-        final dur = (state['duration'] ?? 0.0) as double;
-        if (dur > 0) {
-          _duration = Duration(milliseconds: (dur * 1000).toInt());
+      if (mounted) {
+        setState(() {
+          _isPlaying = state['isPlaying'] ?? false;
+          _position = Duration(
+              milliseconds: ((state['position'] ?? 0.0) * 1000).toInt());
+          final dur = (state['duration'] ?? 0.0) as double;
+          if (dur > 0) {
+            _duration = Duration(milliseconds: (dur * 1000).toInt());
+          }
+        });
+        
+        // Update global playing state
+        ref.read(isPlayingProvider.notifier).state = _isPlaying;
+        
+        // Update playing index if native player advanced
+        final currentTitle = state['currentTitle'] as String?;
+        if (currentTitle != null && currentTitle.isNotEmpty) {
+          _updateNativeIndexByTitle(currentTitle);
         }
-      });
-      
-      // Update playing index if native player advanced
-      final currentTitle = state['currentTitle'] as String?;
-      if (currentTitle != null && currentTitle.isNotEmpty) {
-        _updateNativeIndexByTitle(currentTitle);
       }
     }, onError: (_) {});
   }
@@ -311,21 +316,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       }
     });
 
-    // Auto-select first playable
-    matchedAsync.whenData((matched) {
-      final idx = ref.read(playingIndexProvider);
-      if (idx < 0 && matched.isNotEmpty) {
-        for (int i = 0; i < matched.length; i++) {
-          final t = matched[i].$2;
-          if (t != null && (_nativeAuthorized || t.previewUrl != null)) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              ref.read(playingIndexProvider.notifier).state = i;
-            });
-            break;
-          }
-        }
-      }
-    });
 
     final title = track?.title ?? songEntry?.title ?? '—';
     final artist = track?.artist ?? songEntry?.artist ?? '';
@@ -569,11 +559,30 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         ),
         const SizedBox(width: 32),
         GestureDetector(
-          onTap: () {
+          onTap: () async {
             if (_usingNative) {
-              _isPlaying ? _musicKit.pause() : _musicKit.resume();
+              if (_isPlaying) {
+                await _musicKit.pause();
+                ref.read(isPlayingProvider.notifier).state = false;
+              } else {
+                // If it's paused at the beginning (e.g. they tapped it in home screen but it didn't play),
+                // we should start playing.
+                final dur = _duration.inMilliseconds;
+                if (dur == 0 && _position.inMilliseconds == 0) {
+                   _tryPlayCurrent();
+                } else {
+                   await _musicKit.resume();
+                }
+                ref.read(isPlayingProvider.notifier).state = true;
+              }
             } else {
-              _isPlaying ? _previewPlayer.pause() : _previewPlayer.play();
+              if (_isPlaying) {
+                _previewPlayer.pause();
+                ref.read(isPlayingProvider.notifier).state = false;
+              } else {
+                _previewPlayer.play();
+                ref.read(isPlayingProvider.notifier).state = true;
+              }
             }
           },
           child: Container(

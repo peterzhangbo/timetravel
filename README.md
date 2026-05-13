@@ -1,6 +1,7 @@
 # timetravel
 
 A new Flutter project.
+- [TestFlight](https://testflight.apple.com/join/cREG8gVV)
 
 ## Getting Started
 

@@ -457,17 +457,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       itemBuilder: (context, index) {
         final (song, track) = matched[index];
         final isPlaying = index == playingIndex;
+        final globalIsPlaying = ref.watch(isPlayingProvider);
         final hasMatch = track != null;
         return _TrackCard(
           song: song,
           track: track,
           index: index,
           isPlaying: isPlaying,
+          globalIsPlaying: globalIsPlaying,
           hasMatch: hasMatch,
           onTap: () {
             if (!hasMatch) return;
             HapticFeedback.lightImpact();
             ref.read(playingIndexProvider.notifier).state = index;
+            playGlobalTrack(ref);
           },
         );
       },
@@ -480,6 +483,7 @@ class _TrackCard extends StatelessWidget {
   final dynamic track; // MusicTrack?
   final int index;
   final bool isPlaying;
+  final bool globalIsPlaying;
   final bool hasMatch;
   final VoidCallback onTap;
 
@@ -488,6 +492,7 @@ class _TrackCard extends StatelessWidget {
     required this.track,
     required this.index,
     required this.isPlaying,
+    required this.globalIsPlaying,
     required this.hasMatch,
     required this.onTap,
   });
@@ -574,8 +579,10 @@ class _TrackCard extends StatelessWidget {
                 child: const Text('未匹配',
                     style: TextStyle(fontSize: 10, color: Colors.orange)),
               )
-            else if (isPlaying)
-              const Icon(Icons.equalizer, color: AppColors.accent, size: 20),
+            else if (isPlaying && globalIsPlaying)
+              const Icon(Icons.equalizer, color: AppColors.accent, size: 20)
+            else if (hasMatch)
+              const Icon(Icons.play_arrow_rounded, color: AppColors.textSecondary, size: 20),
           ],
         ),
       ),
